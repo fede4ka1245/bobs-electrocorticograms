@@ -11,20 +11,15 @@ import os
 import plotly.express as px
 from scipy import signal
 import plotly.subplots as sp
-from concurrent.futures import ThreadPoolExecutor
-from dotenv import load_dotenv
-from functools import partial
-
-# Загружаем переменные окружения
-load_dotenv()
+import mne
 
 class SleepStageAnalyzer:
     """Класс для анализа стадий сна по ЭКоГ данным"""
     
-    def __init__(self, model_path: str = os.getenv("MODEL_PATH", "sleep_stage_model.pth")):
+    def __init__(self, model_path: str = "sleep_stage_model.pth"):
         self.model = self._load_model(model_path)
         self.scaler = StandardScaler()
-        self.max_workers = int(os.getenv("CPU_LIMIT", 1))
+        self.sampling_rate = 250  # Гц
         
     def _load_model(self, model_path: str) -> torch.nn.Module:
         """Загрузка предобученной модели"""
@@ -56,33 +51,13 @@ class SleepStageAnalyzer:
             'wake': (predictions == 2).float().mean().item()
         }
 
-    @st.cache_data
-    def process_chunk(self, chunk_data: np.ndarray) -> Dict:
-        """Обработка отдельного чанка данных"""
-        return self.detect_sleep_stages(chunk_data)
-    
-    def parallel_process(self, data: np.ndarray, chunk_size: int = 30000) -> List[Dict]:
-        chunks = [data[i:i + chunk_size] for i in range(0, len(data), chunk_size)]
-        
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            results = list(executor.map(self.process_chunk, chunks))
-        
-        return results
-
 def create_web_interface():
-    st.set_page_config(
-        page_title=os.getenv("APP_TITLE", "Анализ ЭКоГ сна крыс WAG/Rij"),
-        layout="wide"
-    )
+    st.set_page_config(page_title="Анализ ЭКоГ сна крыс WAG/Rij", layout="wide")
     
     # Боковая панель с настройками
     with st.sidebar:
         st.title("Настройки анализа")
-        window_size = st.slider(
-            "Размер окна анализа (сек)", 
-            10, 60, 
-            int(os.getenv("DEFAULT_WINDOW_SIZE", 30))
-        )
+        window_size = st.slider("Размер окна анализа (сек)", 10, 60, 30)
         filter_type = st.selectbox(
             "Тип фильтрации",
             ["Полосовой фильтр", "Вейвлет-преобразование"]
@@ -108,18 +83,56 @@ def create_web_interface():
         # Загружаем и обрабатываем данные
         if uploaded_file.name.endswith('.csv'):
             data = pd.read_csv(uploaded_file)
+        else:  # .edf
+            # Сохраняем временный файл для работы с MNE
+            temp_file = "temp.edf"
+            with open(temp_file, "wb") as f:
+                f.write(uploaded_file.getbuffer())
             
-            # Добавляем индикатор прогресса
-            with st.spinner('Обработка данных...'):
-                # Параллельная обработка данных
-                chunk_results = analyzer.parallel_process(data.iloc[:, 0].values)
+            try:
+                # Загружаем EDF файл
+                raw = mne.io.read_raw_edf(temp_file, preload=True)
                 
-                # Агрегируем результаты
-                sleep_stages = {
-                    'deep_sleep': np.mean([r['deep_sleep'] for r in chunk_results]),
-                    'intermediate': np.mean([r['intermediate'] for r in chunk_results]),
-                    'wake': np.mean([r['wake'] for r in chunk_results])
-                }
+                # Получаем частоту дискретизации
+                analyzer.sampling_rate = raw.info['sfreq']
+                
+                # Определяем размер чанка (5 минут данных)
+                chunk_duration = 300  # секунд
+                chunk_samples = int(chunk_duration * analyzer.sampling_rate)
+                
+                # Позволяем пользователю выбрать временной интервал
+                total_duration = len(raw.times) / analyzer.sampling_rate
+                start_time = st.slider(
+                    "Выберите начало интервала (минуты)",
+                    0,
+                    int(total_duration/60),
+                    0
+                ) * 60  # конвертируем в секунды
+                
+                # Загружаем только выбранный участок данных
+                start_sample = int(start_time * analyzer.sampling_rate)
+                data_chunk = raw.get_data(
+                    start=start_sample,
+                    stop=start_sample + chunk_samples
+                )
+                
+                # Создаем DataFrame для совместимости с остальным кодом
+                data = pd.DataFrame(data_chunk[0].T, columns=['ECoG'])
+                
+                st.info(f"""Загружен EDF файл:
+                    - Каналов: {len(raw.ch_names)}
+                    - Частота дискретизации: {analyzer.sampling_rate} Гц
+                    - Общая длительность: {total_duration/60:.1f} минут
+                    - Текущий интервал: {start_time/60:.1f}-{(start_time + chunk_duration)/60:.1f} минут
+                """)
+                
+            except Exception as e:
+                st.error(f"Ошибка при чтении EDF файла: {str(e)}")
+                return
+            finally:
+                # Удаляем временный файл
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
         
         # Визуализация данных
         st.subheader("Визуализация ЭКоГ данных")
@@ -218,9 +231,9 @@ def create_web_interface():
                 0
             )
             
-            # Вычисляем индексы для выбранного окна
-            start_idx = window_start * analyzer.sampling_rate
-            end_idx = start_idx + window_size * analyzer.sampling_rate
+            # Вычисляем индексы для выбранного окна и преобразуем их в целые числа
+            start_idx = int(window_start * analyzer.sampling_rate)
+            end_idx = int(start_idx + window_size * analyzer.sampling_rate)
             
             # Создаем детальный график выбранного участка
             fig_detailed = go.Figure()
@@ -241,6 +254,9 @@ def create_web_interface():
             
             st.plotly_chart(fig_detailed, use_container_width=True)
 
+        # Анализ стадий сна
+        sleep_stages = analyzer.detect_sleep_stages(data.iloc[:, 0].values)
+        
         # Вывод результатов
         st.subheader("Результаты анализа")
         col1, col2, col3 = st.columns(3)
