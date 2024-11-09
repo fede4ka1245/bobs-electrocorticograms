@@ -2,302 +2,240 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from typing import List, Dict, Optional
-import torch
-from scipy.signal import butter, filtfilt
-from sklearn.preprocessing import StandardScaler
-import joblib
-import os
-import plotly.express as px
+from plotly.subplots import make_subplots
 from scipy import signal
-import plotly.subplots as sp
 import mne
+import os
+import plotly.subplots as sp
+from ml.catboost_inference import predict_states, get_state_name
 
-class SleepStageAnalyzer:
-    """Класс для анализа стадий сна по ЭКоГ данным"""
+@st.cache_data
+def load_and_process_edf(file_buffer):
+    temp_file = "temp.edf"
+    with open(temp_file, "wb") as f:
+        f.write(file_buffer.getbuffer())
     
-    def __init__(self, model_path: str = "sleep_stage_model.pth"):
-        self.model = self._load_model(model_path)
-        self.scaler = StandardScaler()
-        self.sampling_rate = 250  # Гц
+    try:
+        raw = mne.io.read_raw_edf(temp_file, preload=True)
+        stat_data = raw.get_data()[0]
+        sampling_rate = raw.info['sfreq']
+        start_time = 0
         
-    def _load_model(self, model_path: str) -> torch.nn.Module:
-        """Загрузка предобученной модели"""
-        if os.path.exists(model_path):
-            return torch.load(model_path)
-        else:
-            st.error(f"Модель не найдена по пути: {model_path}")
-            return None
+        chunk_duration = 180
+        chunk_samples = int(chunk_duration * sampling_rate)
+        
+        total_duration = len(raw.times) / sampling_rate
+        st.info(f"""Загружен EDF файл:
+            - Каналов: {len(raw.ch_names)}
+            - Частота дискретизации: {sampling_rate} Гц
+            - Общая длительность: {total_duration/60:.1f} минут
+            - Текущий интервал: {start_time/60:.1f}-{(start_time + chunk_duration)/60:.1f} минут
+        """)
+        predictions, timestamps = predict_states(raw)
 
-    def preprocess_data(self, raw_data: np.ndarray) -> np.ndarray:
-        """Предобработка ЭКоГ сигнала"""
-        # Фильтрация сигнала
-        nyquist = self.sampling_rate * 0.5
-        b, a = butter(4, [0.5/nyquist, 30/nyquist], btype='band')
-        filtered_data = filtfilt(b, a, raw_data)
-        
-        # Нормализация
-        normalized_data = self.scaler.fit_transform(filtered_data.reshape(-1, 1))
-        return normalized_data
+        return stat_data, sampling_rate, raw, start_time, total_duration, predictions, timestamps, chunk_samples, chunk_duration
+
+    finally:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+            
+
+def create_visualization(data: np.ndarray, predictions: np.ndarray, timestamps: np.ndarray, sampling_rate: int = 250):
+    """Create visualization with signal and predicted states"""
+    time = np.arange(len(data)) / sampling_rate
     
-    def detect_sleep_stages(self, data: np.ndarray, window_size: int = 30) -> Dict:
-        """Определение стадий сна"""
-        preprocessed_data = self.preprocess_data(data)
-        predictions = self.model(torch.FloatTensor(preprocessed_data))
-        
-        return {
-            'deep_sleep': (predictions == 0).float().mean().item(),
-            'intermediate': (predictions == 1).float().mean().item(),
-            'wake': (predictions == 2).float().mean().item()
-        }
+    # Create figure with subplots
+    fig = make_subplots(
+        rows=3, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.05,
+        row_heights=[0.5, 0.3, 0.2],
+        subplot_titles=("Исходный сигнал ЭКоГ", "Спектрограмма", "Состояния")
+    )
+    
+    # Plot original signal
+    fig.add_trace(
+        go.Scatter(y=data, name="ЭКоГ", line=dict(color='#1f77b4')),
+        row=1, col=1
+    )
+    
+    # Add spectrogram with higher resolution
+    f, t, Sxx = signal.spectrogram(
+        data,
+        fs=sampling_rate,
+        nperseg=1024,     # Размер окна
+        noverlap=512,     # Перекрытие (должно быть < nperseg)
+        detrend=False,
+        scaling='density'
+    )
+    fig.add_trace(
+        go.Heatmap(
+            z=10 * np.log10(Sxx),
+            x=t,
+            y=f,
+            colorscale='Viridis',
+            name='Спектрограмма'
+        ),
+        row=2, col=1
+    )
+    
+    # Colors for different states
+    colors = {
+        0: "rgba(251, 192, 147, 0.5)",  # Background
+        1: "rgba(255, 0, 0, 0.5)",      # Spike-wave discharge
+        2: "rgba(0, 0, 255, 0.5)",      # Delta sleep
+        3: "rgba(0, 255, 0, 0.5)"       # Intermediate sleep
+    }
+    
+    for state_id in np.unique(predictions):
+        mask = predictions == state_id
+        if np.any(mask):
+            fig.add_trace(
+                go.Scatter(
+                    x=timestamps[mask],
+                    y=[state_id] * np.sum(mask),
+                    name=get_state_name(state_id),
+                    mode='markers',
+                    marker=dict(
+                        color=colors.get(state_id, "rgba(128, 128, 128, 0.3)"),
+                        size=5
+                    )
+                ),
+                row=3, col=1
+            )
+    
+    # Update layout
+    fig.update_layout(
+        height=800,
+        showlegend=True,
+        title="Анализ ЭКоГ и состояний",
+        xaxis_title="Время (с)",
+        legend_title="Состоя��ия"
+    )
+    
+    # Update y-axis for states plot
+    fig.update_yaxes(
+        title_text="Состояние",
+        ticktext=[get_state_name(i) for i in range(4)],
+        tickvals=list(range(4)),
+        row=3, col=1
+    )
+    
+    return fig
 
 def create_web_interface():
     st.set_page_config(page_title="Анализ ЭКоГ сна крыс WAG/Rij", layout="wide")
+    st.header("Анализ ЭКоГ сна крыс WAG/Rij")
     
-    # Боковая панель с настройками
-    with st.sidebar:
-        st.title("Настройки анализа")
-        window_size = st.slider("Размер окна анализа (сек)", 10, 60, 30)
-        filter_type = st.selectbox(
-            "Тип фильтрации",
-            ["Полосовой фильтр", "Вейвлет-преобразование"]
-        )
-        
-        st.subheader("Дополнительные параметры")
-        show_spectogram = st.checkbox("Показать спектрограмму", True)
-        show_statistics = st.checkbox("Показать статистику", True)
-        
-    # Основной интерфейс
-    st.title("Анализ фаз сна крыс WAG/Rij")
-    
-    # Загрузка данных
-    uploaded_file = st.file_uploader(
-        "Загрузите файл ЭКоГ (.csv, .edf)", 
-        type=['csv', 'edf']
-    )
+    uploaded_file = st.file_uploader("Загрузите файл ЭКоГ (.csv, .edf)", type=['csv', 'edf'])
     
     if uploaded_file:
-        # Создаем объект анализатора
-        analyzer = SleepStageAnalyzer()
-        
-        # Загружаем и обрабатываем данные
-        if uploaded_file.name.endswith('.csv'):
-            data = pd.read_csv(uploaded_file)
-        else:  # .edf
-            # Сохраняем временный файл для работы с MNE
-            temp_file = "temp.edf"
-            with open(temp_file, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            
-            try:
-                # Загружаем EDF файл
-                raw = mne.io.read_raw_edf(temp_file, preload=True)
+        try:
+            if uploaded_file.name.endswith('.csv'):
+                data = pd.read_csv(uploaded_file).iloc[:, 0].values
+            else:
+                stat_data, sampling_rate, raw, start_time, total_duration, predictions, timestamps, chunk_samples, chunk_duration = load_and_process_edf(uploaded_file)
+
+                total_minutes = int(total_duration / 60)
+                periods = []
+                for i in range(0, total_minutes, 3):
+                    if i + 3 <= total_minutes:
+                        periods.append(f"ЭКоГ. {i}-{i+3} минута(-ы)")
+                    else:
+                        periods.append(f"ЭКоГ. {i}-{total_minutes} минута(-ы)")
                 
-                # Получаем частоту дискретизации
-                analyzer.sampling_rate = raw.info['sfreq']
+                selected_period = st.selectbox(
+                    "Выберите период времени",
+                    periods,
+                    key='period_select'
+                )
                 
-                # Определяем размер чанка (5 минут данных)
-                chunk_duration = 300  # секунд
-                chunk_samples = int(chunk_duration * analyzer.sampling_rate)
+                start_minute = int(selected_period.split(' ')[1].split('-')[0])
+                start_time = start_minute * 60
                 
-                # Позволяем пользователю выбрать временной интервал
-                total_duration = len(raw.times) / analyzer.sampling_rate
-                start_time = st.slider(
-                    "Выберите начало интервала (минуты)",
-                    0,
-                    int(total_duration/60),
-                    0
-                ) * 60  # конвертируем в секунды
-                
-                # Загружаем только выбранный участок данных
-                start_sample = int(start_time * analyzer.sampling_rate)
+                start_sample = int(start_time * sampling_rate)
                 data_chunk = raw.get_data(
                     start=start_sample,
                     stop=start_sample + chunk_samples
                 )
-                
-                # Создаем DataFrame для совместимости с остальным кодом
+
                 data = pd.DataFrame(data_chunk[0].T, columns=['ECoG'])
                 
-                st.info(f"""Загружен EDF файл:
-                    - Каналов: {len(raw.ch_names)}
-                    - Частота дискретизации: {analyzer.sampling_rate} Гц
-                    - Общая длительность: {total_duration/60:.1f} минут
-                    - Текущий интервал: {start_time/60:.1f}-{(start_time + chunk_duration)/60:.1f} минут
-                """)
+                chunk_time = np.arange(len(data)) / sampling_rate + start_time
                 
-            except Exception as e:
-                st.error(f"Ошибка при чтении EDF файла: {str(e)}")
-                return
-            finally:
-                # Удаляем временный файл
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-        
-        # Визуализация данных
-        st.subheader("Визуализация ЭКоГ данных")
-        
-        # Создаем вкладки для разных типов визуализации
-        tab1, tab2, tab3 = st.tabs(["Временной анализ", "Частотный анализ", "Детальный просмотр"])
-        
-        with tab1:
-            # Создаем график с двумя осями Y
-            fig = sp.make_subplots(rows=2, cols=1, 
-                                 shared_xaxes=True,
-                                 vertical_spacing=0.02,
-                                 subplot_titles=("Исходный сигнал ЭКоГ", "Отфильтрованный сигнал"))
-            
-            # Исходный сигнал
-            fig.add_trace(
-                go.Scatter(
-                    y=data.iloc[:, 0],
-                    name="Исходный сигнал",
-                    line=dict(color='#1f77b4')
-                ),
-                row=1, col=1
-            )
-            
-            # Отфильтрованный сигнал
-            filtered_data = analyzer.preprocess_data(data.iloc[:, 0].values)
-            fig.add_trace(
-                go.Scatter(
-                    y=filtered_data.flatten(),
-                    name="Отфильтрованный сигнал",
-                    line=dict(color='#2ca02c')
-                ),
-                row=2, col=1
-            )
-            
-            fig.update_layout(height=600, showlegend=True)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with tab2:
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # Спектрограмма
-                st.subheader("Спектрограмма")
-                f, t, Sxx = signal.spectrogram(data.iloc[:, 0], 
-                                             fs=analyzer.sampling_rate,
-                                             nperseg=256,
-                                             noverlap=128)
+                chunk_predictions = predictions[
+                    (timestamps >= start_time) & 
+                    (timestamps < start_time + chunk_duration)
+                ]
+                chunk_timestamps = timestamps[
+                    (timestamps >= start_time) & 
+                    (timestamps < start_time + chunk_duration)
+                ]
                 
-                fig_spectro = go.Figure(data=go.Heatmap(
-                    z=10 * np.log10(Sxx),
-                    x=t,
-                    y=f,
-                    colorscale='Viridis'
-                ))
+                fig = sp.make_subplots(rows=1, cols=1, 
+                                    shared_xaxes=True,
+                                    vertical_spacing=0.02)
                 
-                fig_spectro.update_layout(
-                    title='Спектрограмма сигнала',
-                    xaxis_title='Время (с)',
-                    yaxis_title='Частота (Гц)',
-                    height=400
+                fig.add_trace(
+                    go.Scatter(
+                        x=chunk_time,
+                        y=data.iloc[:, 0],
+                        name="Исходный сигнал",
+                        line=dict(color='#1f77b4')
+                    ),
+                    row=1, col=1
                 )
-                st.plotly_chart(fig_spectro, use_container_width=True)
-            
-            with col2:
-                # График спектральной плотности мощности
-                st.subheader("Спектральная плотность мощности")
-                f, Pxx = signal.welch(data.iloc[:, 0], 
-                                    fs=analyzer.sampling_rate,
-                                    nperseg=1024)
-                
-                fig_psd = go.Figure(data=go.Scatter(
-                    x=f,
-                    y=10 * np.log10(Pxx),
-                    mode='lines',
-                    line=dict(color='#d62728')
-                ))
-                
-                fig_psd.update_layout(
-                    title='Спектральная плотность мощности',
-                    xaxis_title='Частота (Гц)',
-                    yaxis_title='Мощность (дБ/Гц)',
-                    height=400
-                )
-                st.plotly_chart(fig_psd, use_container_width=True)
-        
-        with tab3:
-            # Интерактивный просмотр участков сигнала
-            st.subheader("Детальный просмотр сигнала")
-            
-            # Слайдер для выбора временного окна
-            window_start = st.slider(
-                "Выберите начальную точку (сек)",
-                0,
-                int(len(data)/analyzer.sampling_rate) - window_size,
-                0
-            )
-            
-            # Вычисляем индексы для выбранного окна и преобразуем их в целые числа
-            start_idx = int(window_start * analyzer.sampling_rate)
-            end_idx = int(start_idx + window_size * analyzer.sampling_rate)
-            
-            # Создаем детальный график выбранного участка
-            fig_detailed = go.Figure()
-            
-            fig_detailed.add_trace(go.Scatter(
-                y=data.iloc[start_idx:end_idx, 0],
-                name="Сигнал",
-                line=dict(color='#17becf')
-            ))
-            
-            fig_detailed.update_layout(
-                title=f'Детальный просмотр (окно {window_size} сек)',
-                xaxis_title='Отсчеты',
-                yaxis_title='Амплитуда',
-                height=400,
-                showlegend=True
-            )
-            
-            st.plotly_chart(fig_detailed, use_container_width=True)
-
-        # Анализ стадий сна
-        sleep_stages = analyzer.detect_sleep_stages(data.iloc[:, 0].values)
-        
-        # Вывод результатов
-        st.subheader("Результаты анализа")
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric("Глубокий сон", f"{sleep_stages['deep_sleep']:.1%}")
-        with col2:
-            st.metric("Промежуточная фаза", f"{sleep_stages['intermediate']:.1%}")
-        with col3:
-            st.metric("Бодрствование", f"{sleep_stages['wake']:.1%}")
-            
-        if show_statistics:
-            st.subheader("Статистика сигнала")
-            stats_col1, stats_col2 = st.columns(2)
-            
-            with stats_col1:
-                st.write("Базовые характеристики:")
-                st.write(f"- Длительность записи: {len(data)/analyzer.sampling_rate:.1f} сек")
-                st.write(f"- Частота дискретизации: {analyzer.sampling_rate} Гц")
-                
-            with stats_col2:
-                st.write("Спектральные характеристики:")
-                # Добавить спектральный анализ
-                pass
-        
-        # Экспорт результатов
-        if st.button("Экспортировать результаты"):
-            results = {
-                'sleep_stages': sleep_stages,
-                'analysis_params': {
-                    'window_size': window_size,
-                    'filter_type': filter_type
+                            
+                colors = {
+                    0: "rgba(251, 192, 147, 0.5)",  # Background
+                    1: "rgba(255, 0, 0, 0.5)",      # Spike-wave discharge
+                    2: "rgba(0, 0, 255, 0.5)",      # Delta sleep
+                    3: "rgba(0, 255, 0, 0.5)"       # Intermediate sleep
                 }
-            }
-            # Сохранение результатов в файл
-            st.download_button(
-                "Скачать отчет",
-                data=pd.DataFrame(results).to_csv(),
-                file_name="sleep_analysis_report.csv",
-                mime="text/csv"
-            )
+    
+                for state_id in np.unique(chunk_predictions):
+                    mask = chunk_predictions == state_id
+                    if np.any(mask):
+                        changes = np.diff(mask.astype(int))
+                        zone_starts = chunk_timestamps[:-1][changes == 1]
+                        zone_ends = chunk_timestamps[:-1][changes == -1]
+                        
+                        if mask[0]:
+                            zone_starts = np.insert(zone_starts, 0, chunk_timestamps[0])
+                        if mask[-1]:
+                            zone_ends = np.append(zone_ends, chunk_timestamps[-1])
+                        
+                        for start, end in zip(zone_starts, zone_ends):
+                            fig.add_vrect(
+                                x0=start,
+                                x1=end,
+                                fillcolor=colors.get(state_id, "rgba(128, 128, 128, 0.5)"),
+                                layer="below",
+                                line_width=0,
+                                name=get_state_name(state_id),
+                                legendgroup=f"state_{state_id}",
+                                showlegend=bool(start == zone_starts[0])
+                            )
+                title = "Разметка " + selected_period
+                fig.update_layout(
+                    title=title,
+                    height=600, 
+                    showlegend=True,
+                    xaxis_title="Время (с)"
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+
+                fig_pie = go.Figure(data=[go.Pie(
+                    labels=[get_state_name(i) for i in range(4)],
+                    values=[np.sum(predictions == i) for i in range(4)],
+                    hole=.3
+                )])
+                fig_pie.update_layout(title="Распределение состояний", width=500)
+                st.plotly_chart(fig_pie)
+                
+        except Exception as e:
+            st.error(f"Ошибка обработки данных: {str(e)}")
 
 if __name__ == "__main__":
     create_web_interface()

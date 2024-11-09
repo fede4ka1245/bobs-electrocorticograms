@@ -1,0 +1,9 @@
+<View>
+  <TimeSeriesLabels name="label" toName="ts">
+    <Label value="Run"/>
+    <Label value="Walk"/>
+  </TimeSeriesLabels> 
+  <TimeSeries name="ts" valueType="url" value="$file" timeColumn="time">
+    <Channel column="ECoG" />
+  </TimeSeries>
+</View>

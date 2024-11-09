@@ -1,0 +1,218 @@
+{ 
+    "user" : {
+        "id": 1,
+        "firstName": "Arvindra",
+        "lastName": "Sehmi",
+        "username": "vin",
+        "email": "vin@cloudopti.com",
+        "avatar": null,
+        "initials": "AS"
+    },
+  
+    "interfaces": [
+        "panel",
+        "update",
+        "submit",
+        "skip",
+        "controls",
+        "infobar",
+        "instruction",
+        "ground-truth",
+        "annotations:history",
+        "annotations:tabs",
+        "annotations:menu",
+        "annotations:current",
+        "annotations:add-new",
+        "annotations:delete",
+        "annotations:view-all",
+        "predictions:tabs",
+        "predictions:menu",
+        "auto-annotation",
+        "edit-history",
+        "topbar:prevnext"
+    ],
+
+    
+
+    "task_configs": [
+        {
+            "name": "Timeseries XML",
+            "description": "My Bounding Box Single Image Annotation (Local Image)",
+            "annotation_type": "image",
+            "config": { 
+                "file": "./label_studio_configs/xml/timeseries.xml" 
+            },
+            "task": {
+                "object": {
+                    "annotations": [],
+                    "predictions": [],
+                    "id": 1,
+                    "data": {
+                        "file": "https://s3.timeweb.cloud/27d6b1d6-241f2159-8e91-4925-be63-7cc5c17ad8ac/ecog_data.csv" 
+                    }
+                }
+            }
+        },
+        {
+            "name": "My Bounding Box Single",
+            "description": "My Bounding Box Single Image Annotation",
+            "annotation_type": "image",
+            "config": { 
+                "file": "./label_studio_configs/xml/bounding_box_config.xml" 
+            },
+            "task": {
+                "object": {
+                    "annotations": [],
+                    "predictions": [],
+                    "id": 1,
+                    "data": {
+                        "image": "https://htx-pub.s3.us-east-1.amazonaws.com/examples/images/nick-owuor-astro-nic-visuals-wDifg5xc9Z4-unsplash.jpg"
+                    }
+                }
+            }
+        },
+        {
+            "name": "My Bounding Box Multi",
+            "description": "My Bounding Box Multiple Images Annotation",
+            "annotation_type": "image",
+            "config": { 
+                "file": "./label_studio_configs/xml/example_bounding_box_config.xml" 
+            },
+            "task": {
+                "file": "./label_studio_configs/json/example_tasks.json" 
+            }
+        },
+        {
+            "name": "Bounding Box Example",
+            "description": "Bounding Box Image Annotation Example",
+            "annotation_type": "image",
+            "config": {
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/image_bbox/config.xml" 
+            },
+            "task": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/image_bbox/tasks.json" 
+            }
+        },
+        {
+            "name": "Ellipse Example",
+            "description": "Ellipse Image Annotation Example",
+            "annotation_type": "image",
+            "config": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/image_ellipses/config.xml" 
+            },
+            "task": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/image_ellipses/tasks.json" 
+            }
+        },
+        {
+            "name": "Key Points Example",
+            "description": "Key Points Image Annotation Example",
+            "annotation_type": "image",
+            "config": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/image_keypoints/config.xml" 
+            },
+            "task": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/image_keypoints/tasks.json" 
+            }
+        },
+        {
+            "name": "Image Multi Label Example",
+            "description": "Multi Label Image Annotation Example",
+            "annotation_type": "image",
+            "config": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/image_multilabel/config.xml" 
+            },
+            "task": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/image_multilabel/tasks.json" 
+            }
+        },
+        {
+            "name": "Named Entity Example",
+            "description": "Named Entity Example",
+            "annotation_type": "ner",
+            "config": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/named_entity/config.xml" 
+            },
+            "task": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/named_entity/tasks.json" 
+            }
+        },
+        {
+            "name": "Rich Text HTML Example",
+            "description": "Rich Text HTML Annotation Example",
+            "annotation_type": "text",
+            "config": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/rich_text_html/config.xml" 
+            },
+            "task": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/rich_text_html/tasks.json" 
+            }
+        },
+        {
+            "name": "Rich Text Plain Example",
+            "description": "Rich Text Plain Annotation Example",
+            "annotation_type": "ner",
+            "config": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/rich_text_plain/config.xml" 
+            },
+            "task": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/rich_text_plain/tasks.json" 
+            }
+        },
+        {
+            "name": "Audio Regions Example",
+            "description": "Audio Regions Example",
+            "annotation_type": "audio_regions",
+            "config": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/audio_regions/config.xml" 
+            },
+            "task": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/audio_regions/tasks.json" 
+            }
+        },
+        {
+            "name": "Dialog Analysis Example",
+            "description": "Dialog Analysis",
+            "annotation_type": "dialogue_analysis",
+            "config": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/dialogue_analysis/config.xml" 
+            },
+            "task": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/dialogue_analysis/tasks.json" 
+            }
+        },
+        {
+            "name": "Image Polygons Example",
+            "description": "Image Polygons Example",
+            "annotation_type": "image_polygons",
+            "config": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/image_polygons/config.xml" 
+            },
+            "task": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/image_polygons/tasks.json" 
+            }
+        },
+        {
+            "name": "Image Segmentation Example",
+            "description": "Image Segmentation Example",
+            "annotation_type": "image_segmentation",
+            "config": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/image_segmentation/config.xml" 
+            },
+            "task": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/image_segmentation/tasks.json" 
+            }
+        },
+        {
+            "name": "Video Example",
+            "description": "Video Annotation Example",
+            "annotation_type": "video",
+            "config": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/video/config.xml" 
+            },
+            "task": { 
+                "url": "https://raw.githubusercontent.com/HumanSignal/label-studio/develop/web/libs/editor/src/examples/video/tasks.json" 
+            }
+        }
+    ]
+}
