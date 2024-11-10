@@ -1,0 +1,19 @@
+/* Светлая тема */
+:root {
+  --background-color: white;
+  --text-color: black;
+}
+
+body {
+  background-color: var(--background-color);
+  color: var(--text-color);
+}
+
+/* Стили для основных компонентов */
+.ls-common {
+  background-color: var(--background-color);
+}
+
+.ls-panel {
+  background-color: var(--background-color);
+} 

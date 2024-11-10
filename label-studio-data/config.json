@@ -1,0 +1,13 @@
+{
+  "auth": {
+    "auth_type": "DISABLED",
+    "guest_access": true,
+    "auth_middleware": []
+  },
+  "ui": {
+    "theme": "light",
+    "css": {
+      "custom": false
+    }
+  }
+} 

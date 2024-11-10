@@ -6,15 +6,25 @@ services:
       context: ./app
       dockerfile: Dockerfile
     ports:
-      - "${STREAMLIT_PORT}:8501"
+      - "${STREAMLIT_PORT:-8501}:8501"
     volumes:
       - ./app:/app
     environment:
       - PYTHONUNBUFFERED=1
-    deploy:
-      resources:
-        limits:
-          cpus: '${CPU_LIMIT}'
-        reservations:
-          cpus: '${CPU_RESERVATION}'
+      - LABEL_STUDIO_URL=http://label-studio:8080
+    depends_on:
+      - label-studio
+
+  label-studio:
+    image: heartexlabs/label-studio:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./mydata:/label-studio/data
+    environment:
+      - LABEL_STUDIO_NO_ANALYTICS=true
+      - LABEL_STUDIO_AUTH_TYPE=DISABLED
+      - LABEL_STUDIO_DISABLE_SIGNUP=true
+      - LABEL_STUDIO_ALLOW_GUEST_ACCESS=true
+    command: label-studio start --no-browser
     restart: unless-stopped
