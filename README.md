@@ -8,3 +8,5 @@
 docker compose up -d
 ```
 
+# ML-solution
+Инструкция по работе с ML-решением: [/ml-solution/README.md](https://github.com/fede4ka1245/bobs-electrocorticograms/tree/main/ml-solution)
