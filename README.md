@@ -13,4 +13,4 @@ docker compose up -d
 Инструкция по работе с ML-решением: [/ml-solution/README.md](https://github.com/fede4ka1245/bobs-electrocorticograms/tree/main/ml-solution)
 
 ## 🔮 Predictions
-Предикты находятся тут: [/predictions](https://github.com/fede4ka1245/bobs-electrocorticograms/tree/main/predictions)
+Предикты на тестовые данные находятся тут: [/predictions](https://github.com/fede4ka1245/bobs-electrocorticograms/tree/main/predictions)
