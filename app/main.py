@@ -27,12 +27,7 @@ def load_and_process_edf(file_buffer):
         chunk_samples = int(chunk_duration * sampling_rate)
         
         total_duration = len(raw.times) / sampling_rate
-        st.info(f"""Загружен EDF файл:
-            - Каналов: {len(raw.ch_names)}
-            - Частота дискретизации: {sampling_rate} Гц
-            - Общая длительность: {total_duration/60:.1f} минут
-            - Текущий интервал: {start_time/60:.1f}-{(start_time + chunk_duration)/60:.1f} минут
-        """)
+        st.info(f"""Загружен EDF файл:\n- Каналов: {len(raw.ch_names)}\n- Частота дискретизации: {sampling_rate} Гц\n- Общая длительность: {total_duration/60:.1f} минут\n- Временной интервал: 3 минуты""")
         predictions, timestamps = predict_states(raw)
 
         return stat_data, sampling_rate, raw, start_time, total_duration, predictions, timestamps, chunk_samples, chunk_duration

@@ -1,0 +1,66 @@
+<View>
+  <Style>
+    [class*='App_root'] { 
+      --background-color: white;
+      --text-color: black;
+      background: white;
+      color: black;
+    }
+    
+    [class*='Segment_block'] {
+      --background-color: white;
+      background: white;
+    }
+    
+    [class*='Common_menu'] {
+      --background-color: white;
+      background: white;
+      color: black;
+    }
+    
+    [class*='Toolbar_block'] {
+      --background-color: white;
+      background: white;
+    }
+    
+    [class*='Panel_block'] {
+      --background-color: white;
+      background: white;
+    }
+    
+    [class*='Button_button'] {
+      --background-color: #f0f0f0;
+      background: #f0f0f0;
+      color: black;
+    }
+    
+    [class*='Button_button']:hover {
+      --background-color: #e0e0e0;
+      background: #e0e0e0;
+    }
+  </Style>
+
+  <Header value="ECoG States Labeling"/>
+  
+  <TimeSeriesLabels name="states" toName="ts" choice="multiple">
+    <Label value="Background" background="#cccccc"/>
+    <Label value="SWD" background="#FF0000"/>
+    <Label value="DS" background="#0000FF"/>
+    <Label value="IS" background="#00FF00"/>
+  </TimeSeriesLabels>
+  
+  <TimeSeries name="ts" valueType="json" timeColumn="time" sep="," >
+    <Channel column="ECoG" displayName="ECoG Signal" displayFormat="0.00"/>
+  </TimeSeries>
+
+  <View style="display: flex; justify-content: space-between; margin-top: 1em;">
+    <TextArea name="notes" toName="ts" 
+              placeholder="Add notes about this segment..."
+              rows="1" maxSubmissions="1"/>
+    <Choices name="quality" toName="ts" choice="single" showInLine="true">
+      <Choice value="Good"/>
+      <Choice value="Unclear"/>
+      <Choice value="Bad"/>
+    </Choices>
+  </View>
+</View>

@@ -292,9 +292,7 @@ def extract_features(segments):
     features = np.clip(features, -1e6, 1e6)
 
     # Финальное обновление прогресса с общей статистикой
-    total_time = time.time() - start_time
-    average_speed = n_segments / total_time if total_time > 0 else 0
-    progress_bar.progress(1.0, text=f"Готово! Обработано {n_segments} сегментов со средней скоростью {average_speed:.1f} сегментов/сек")
+    progress_bar.progress(1.0, text=f"Готово! Обработка завершена")
     
     return features
 
