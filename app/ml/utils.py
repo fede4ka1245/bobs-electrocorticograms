@@ -14,6 +14,10 @@ from tqdm import tqdm
 import mne
 import pandas as pd
 
+import streamlit as st
+
+import time  # Добавляем в начало файла
+
 
 def different_val_train_paths(train_paths, val_paths, use_extract_features=True):
     segments, labels = create_dataset(train_paths)
@@ -138,16 +142,42 @@ def extract_features(segments):
     # Нормализация всего датасета с проверкой на нулевую дисперсию
     std = np.std(segments)
     if std < 1e-10:
-        segments = (segments - np.mean(segments))  # Только центрируем данные
+        segments = (segments - np.mean(segments))
     else:
         segments = (segments - np.mean(segments)) / std
 
-    for i in tqdm(range(n_segments)):
+    # Создаем progress bar
+    progress_text = "Обработка..."
+    progress_bar = st.progress(0, text=progress_text)
+    
+    # Инициализируем переменные для отслеживания прогресса и скорости
+    last_percent = -1
+    start_time = time.time()
+    segments_processed = 0
+    
+    for i in range(n_segments):
         segment_features = []
-
+        
+        # Вычисляем текущий процент
+        current_percent = int((i + 1) / n_segments * 100)
+        
+        # Обновляем прогресс только если процент изменился
+        if current_percent > last_percent:
+            # Вычисляем скорость обработки
+            elapsed_time = time.time() - start_time
+            if elapsed_time > 0:
+                speed = segments_processed / elapsed_time
+                progress_bar.progress(
+                    current_percent / 100, 
+                    text=f"{progress_text} {current_percent}% (Скорость: {speed / 60:.1f} мин. записи за секунду)"
+                )
+            last_percent = current_percent
+        
+        segments_processed += 1
+        
         for channel in range(segments.shape[1]):
             signal = segments[i, channel]
-
+            
             # Проверка на одинаковые значения
             if np.all(signal == signal[0]):
                 # Если все значения одинаковые, пропускаем статистические вычисления
@@ -261,6 +291,11 @@ def extract_features(segments):
     # Дополнительная проверка на выбросы
     features = np.clip(features, -1e6, 1e6)
 
+    # Финальное обновление прогресса с общей статистикой
+    total_time = time.time() - start_time
+    average_speed = n_segments / total_time if total_time > 0 else 0
+    progress_bar.progress(1.0, text=f"Готово! Обработано {n_segments} сегментов со средней скоростью {average_speed:.1f} сегментов/сек")
+    
     return features
 
 

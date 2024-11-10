@@ -11,7 +11,7 @@ from ml.catboost_inference import predict_states, get_state_name
 from uuid import uuid4
 import io
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_and_process_edf(file_buffer):
     temp_file = "temp.edf"
     with open(temp_file, "wb") as f:
@@ -164,6 +164,9 @@ def save_predictions_to_edf(raw, predictions, timestamps):
     
     with open(temp_file, 'rb') as f:
         buffer = io.BytesIO(f.read())
+
+    if os.path.exists(temp_file):
+        os.remove(temp_file)
         
     return buffer
 
