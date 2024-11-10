@@ -8,6 +8,8 @@ import mne
 import os
 import plotly.subplots as sp
 from ml.catboost_inference import predict_states, get_state_name
+from uuid import uuid4
+import io
 
 @st.cache_data
 def load_and_process_edf(file_buffer):
@@ -110,7 +112,7 @@ def create_visualization(data: np.ndarray, predictions: np.ndarray, timestamps: 
         showlegend=True,
         title="Анализ ЭКоГ и состояний",
         xaxis_title="Время (с)",
-        legend_title="Состоя��ия"
+        legend_title="Состояия"
     )
     
     # Update y-axis for states plot
@@ -122,6 +124,48 @@ def create_visualization(data: np.ndarray, predictions: np.ndarray, timestamps: 
     )
     
     return fig
+
+def save_predictions_to_edf(raw, predictions, timestamps):
+    """Сохраняет предсказания как аннотации в EDF файле"""
+    onset = []
+    duration = []
+    description = []
+    
+    state_names = {1: 'swd', 2: 'ds', 3: 'is'}
+    
+    current_state = predictions[0]
+    start_time = timestamps[0]
+    
+    for i in range(1, len(predictions)):
+        if predictions[i] != current_state or i == len(predictions) - 1:
+            if current_state != 0:
+                state_name = state_names[current_state]
+                onset.append(float(start_time))
+                duration.append(0.0)
+                description.append(f"{state_name}1")
+                onset.append(float(timestamps[i]))
+                duration.append(0.0)
+                description.append(f"{state_name}2")
+            
+            start_time = timestamps[i]
+            current_state = predictions[i]
+    
+    annotations = mne.Annotations(
+        onset=onset,
+        duration=duration,
+        description=description
+    )
+    
+    raw_predicted = raw.copy()
+    raw_predicted.set_annotations(annotations)
+    
+    temp_file = f'{uuid4()}_predicted.edf'
+    mne.export.export_raw(temp_file, raw_predicted, fmt='edf', overwrite=True)
+    
+    with open(temp_file, 'rb') as f:
+        buffer = io.BytesIO(f.read())
+        
+    return buffer
 
 def create_web_interface():
     st.set_page_config(page_title="Анализ ЭКоГ сна крыс WAG/Rij", layout="wide")
@@ -135,6 +179,16 @@ def create_web_interface():
                 data = pd.read_csv(uploaded_file).iloc[:, 0].values
             else:
                 stat_data, sampling_rate, raw, start_time, total_duration, predictions, timestamps, chunk_samples, chunk_duration = load_and_process_edf(uploaded_file)
+                
+                # Добавляем кнопку для скачивания файла с аннотациями
+                if st.button("Скачать EDF файл с разметкой"):
+                    buffer = save_predictions_to_edf(raw, predictions, timestamps)
+                    st.download_button(
+                        label="Скачать размеченный EDF файл",
+                        data=buffer,
+                        file_name=f"predicted_{uploaded_file.name}",
+                        mime="application/octet-stream"
+                    )
 
                 total_minutes = int(total_duration / 60)
                 periods = []
